@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PortfolioChart from './PortfolioChart';
 import { Wallet, Droplet, TrendingUp, TrendingDown, Plus, Edit2, Trash2, Save, X, Activity } from 'lucide-react';
 
 export default function CryptoDashboard() {
