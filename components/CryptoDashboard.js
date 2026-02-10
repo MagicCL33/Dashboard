@@ -1130,6 +1130,9 @@ function AirdropForm({ onSave, onCancel }) {
     date: new Date().toISOString().split('T')[0],
     wallet: '',
     actions: ''
+    profitLoss: '',
+    type: 'expense'
+    
   });
 
   return (
@@ -1180,6 +1183,49 @@ function AirdropForm({ onSave, onCancel }) {
           rows="3"
         />
       </div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-slate-700/30 rounded-lg">
+  <div className="md:col-span-2">
+    <label className="block text-slate-300 text-sm font-bold mb-2 orbitron">
+      💰 BÉNÉFICES / PERTES
+    </label>
+  </div>
+  
+  <div>
+    <label className="block text-slate-400 text-sm mb-2">Type</label>
+    <select
+      value={formData.type}
+      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+      className="w-full px-4 py-2 rounded-lg bg-slate-800 text-white border border-slate-700"
+    >
+      <option value="expense">💸 Frais payés (perte)</option>
+      <option value="income">💰 Gain reçu (profit)</option>
+    </select>
+  </div>
+  
+  <div>
+    <label className="block text-slate-400 text-sm mb-2">Montant ($)</label>
+    <input
+      type="number"
+      step="0.01"
+      placeholder="Ex: 15.50"
+      value={formData.profitLoss}
+      onChange={(e) => {
+        const value = parseFloat(e.target.value) || 0;
+        const amount = formData.type === 'expense' ? -Math.abs(value) : Math.abs(value);
+        setFormData({ ...formData, profitLoss: e.target.value });
+      }}
+      className="w-full px-4 py-2 rounded-lg bg-slate-800 text-white border border-slate-700"
+    />
+  </div>
+  
+  <div className="md:col-span-2 text-sm text-slate-400">
+    <p>
+      {formData.type === 'expense' 
+        ? '💸 Les frais seront soustraits du bilan (gas fees, bridge fees, etc.)'
+        : '💰 Les gains seront ajoutés au bilan (airdrop reçu, rewards, etc.)'}
+    </p>
+  </div>
+</div>
       <div className="flex gap-2 mt-4">
         <button
           onClick={() => onSave(formData)}
