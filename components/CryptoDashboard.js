@@ -639,6 +639,13 @@ export default function CryptoDashboard() {
                 <Wallet size={24} className="text-indigo-400" />
                 Scanner un Wallet
               </h3>
+          {/* Graphique historique */}
+<PortfolioChart 
+  cryptos={cryptos}
+  portfolioHistory={portfolioHistory}
+  onUpdateHistory={savePortfolioHistory}
+/>
+
               <p className="text-sm text-slate-400 mb-4">
                 Entrez l'adresse de votre wallet pour importer automatiquement vos cryptos (Ethereum, BSC, Polygon)
               </p>
@@ -1140,6 +1147,16 @@ function AirdropCard({ airdrop, isEditing, onEdit, onSave, onCancel, onDelete, o
                       </span>
                     </td>
                     <td className="py-3 px-3 text-slate-300">{action.description}</td>
+                    <td className="py-3 px-3 text-right">
+  {action.profitLoss !== undefined && action.profitLoss !== 0 ? (
+    <span className={`font-bold ${action.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+      {action.profitLoss >= 0 ? '+' : ''}{action.profitLoss.toFixed(2)} $
+    </span>
+  ) : (
+    <span className="text-slate-500">-</span>
+  )}
+</td>
+
                     <td className="py-3 px-3 text-right">
                       <button
                         onClick={() => onDeleteAction(action.id)}
