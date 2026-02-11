@@ -1078,7 +1078,10 @@ function AirdropCard({ airdrop, isEditing, onEdit, onSave, onCancel, onDelete, o
       </div>
 
       <div className="mb-4">
-        <div className="text-xs text-slate-500 mb-1 orbitron">PROGRESSION</div>
+        <div>PROGRESSION</div>
+        <div>8 / 10</div>
+        <div>Barre de progression</div>
+      </div>
         {/* Affichage du bilan */}
 {(() => {
   const balance = calculateAirdropBalance(airdrop);
