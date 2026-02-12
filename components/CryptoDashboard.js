@@ -116,12 +116,43 @@ export default function CryptoDashboard() {
     if (typeof window !== 'undefined' && localStorage) localStorage.setItem('portfolio-history', JSON.stringify(newHistory));
   };
 
-  const addCrypto = async (crypto) => {
-    const newCrypto = { id: Date.now(), ...crypto, addedDate: new Date().toISOString() };
-    const listWithNew = [...cryptos, newCrypto];
-    // On tente de récupérer le prix immédiatement pour la nouvelle crypto
-    const updatedList = await fetchPricesFromCoinGecko(listWithNew);
-    await saveCryptos(updatedList || listWithNew);
+  const addCrypto = async (newAsset) => {
+    const existingIndex = cryptos.findIndex(
+      (c) => c.symbol.toUpperCase() === newAsset.symbol.toUpperCase()
+    );
+
+    let updatedList;
+    const transaction = {
+      id: Date.now(),
+      date: new Date().toLocaleDateString(),
+      amount: parseFloat(newAsset.amount) || 0,
+      invested: parseFloat(newAsset.invested) || 0
+    };
+
+    if (existingIndex !== -1) {
+      updatedList = [...cryptos];
+      const existing = updatedList[existingIndex];
+      
+      updatedList[existingIndex] = {
+        ...existing,
+        amount: existing.amount + transaction.amount,
+        invested: (existing.invested || 0) + transaction.invested,
+        // On ajoute la nouvelle transaction à l'historique
+        history: [...(existing.history || []), transaction],
+        lastAddedDate: new Date().toISOString()
+      };
+    } else {
+      const newEntry = { 
+        id: Date.now(), 
+        ...newAsset, 
+        history: [transaction], // Initialisation de l'historique
+        addedDate: new Date().toISOString() 
+      };
+      updatedList = [...cryptos, newEntry];
+    }
+
+    const listWithPrices = await fetchPricesFromCoinGecko(updatedList);
+    await saveCryptos(listWithPrices || updatedList);
     setShowAddCrypto(false);
   };
 
@@ -235,6 +266,8 @@ export default function CryptoDashboard() {
 // Composant pour l'affichage d'une carte Crypto
 function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
   const [formData, setFormData] = useState(crypto);
+  const [showHistory, setShowHistory] = useState(false); // État pour le tiroir
+  
   const currentPrice = crypto.price || 0;
   const val = crypto.amount * currentPrice;
   const pnl = val - (crypto.invested || 0);
@@ -242,7 +275,7 @@ function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
   if (isEditing) {
     return (
       <div className="card rounded-2xl p-6 grid grid-cols-2 gap-4">
-        <input value={formData.symbol} onChange={e => setFormData({...formData, symbol: e.target.value.toUpperCase()})} placeholder="Symbole (ex: BTC)" className="p-2 bg-slate-900 rounded text-white" />
+        <input value={formData.symbol} onChange={e => setFormData({...formData, symbol: e.target.value.toUpperCase()})} placeholder="Symbole" className="p-2 bg-slate-900 rounded text-white" />
         <input type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} placeholder="Quantité" className="p-2 bg-slate-900 rounded text-white" />
         <input type="number" value={formData.invested} onChange={e => setFormData({...formData, invested: parseFloat(e.target.value)})} placeholder="Total Investi ($)" className="p-2 bg-slate-900 rounded text-white" />
         <div className="flex gap-2">
@@ -252,6 +285,67 @@ function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
       </div>
     );
   }
+
+  return (
+    <div className="card rounded-2xl overflow-hidden mb-2">
+      <div 
+        className="p-6 flex justify-between items-center cursor-pointer hover:bg-slate-800/40 transition-colors"
+        onClick={() => setShowHistory(!showHistory)}
+      >
+        <div className="flex items-center gap-4">
+          <div className="bg-indigo-500/20 p-3 rounded-full">
+            <TrendingUp size={24} className="text-indigo-400" />
+          </div>
+          <div>
+            <h3 className="orbitron text-xl font-bold text-white">{crypto.symbol}</h3>
+            <p className="text-slate-500 text-xs">Prix actuel: ${currentPrice.toLocaleString()}</p>
+          </div>
+        </div>
+        
+        <div className="text-right">
+          <div className="orbitron font-bold text-white">${val.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</div>
+          <div className={`text-xs ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$ ({((pnl / crypto.invested) * 100).toFixed(1)}%)
+          </div>
+        </div>
+
+        <div className="flex gap-2 ml-4" onClick={(e) => e.stopPropagation()}>
+          <button onClick={onEdit} className="p-2 bg-slate-800 rounded text-slate-400 hover:text-white"><Edit2 size={14}/></button>
+          <button onClick={onDelete} className="p-2 bg-red-900/20 rounded text-red-500 hover:bg-red-900/40"><Trash2 size={14}/></button>
+        </div>
+      </div>
+
+      {/* TIROIR DE L'HISTORIQUE */}
+      {showHistory && crypto.history && (
+        <div className="bg-slate-900/60 p-4 border-t border-slate-800 animate-in slide-in-from-top duration-300">
+          <div className="text-[10px] orbitron text-slate-500 mb-2 tracking-widest">HISTORIQUE DES ACHATS</div>
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-800">
+                <th className="pb-2">DATE</th>
+                <th className="pb-2">QUANTITÉ</th>
+                <th className="pb-2">INVESTI</th>
+                <th className="pb-2 text-right">PRIX D'ACHAT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {crypto.history.map((tx) => (
+                <tr key={tx.id} className="border-b border-slate-800/30">
+                  <td className="py-2 text-slate-300">{tx.date}</td>
+                  <td className="py-2 text-white">{tx.amount}</td>
+                  <td className="py-2 text-white">${tx.invested.toLocaleString()}</td>
+                  <td className="py-2 text-right text-slate-400">
+                    ${(tx.invested / tx.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
   return (
     <div className="card rounded-2xl p-6 flex justify-between items-center">
