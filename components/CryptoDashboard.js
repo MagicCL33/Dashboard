@@ -264,9 +264,10 @@ export default function CryptoDashboard() {
 }
 
 // Composant pour l'affichage d'une carte Crypto
+// --- COMPOSANT CRYPTOCARD AVEC HISTORIQUE ---
 function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
   const [formData, setFormData] = useState(crypto);
-  const [showHistory, setShowHistory] = useState(false); // État pour le tiroir
+  const [showHistory, setShowHistory] = useState(false);
   
   const currentPrice = crypto.price || 0;
   const val = crypto.amount * currentPrice;
@@ -305,7 +306,7 @@ function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
         <div className="text-right">
           <div className="orbitron font-bold text-white">${val.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</div>
           <div className={`text-xs ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$ ({((pnl / crypto.invested) * 100).toFixed(1)}%)
+            {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$ ({crypto.invested > 0 ? ((pnl / crypto.invested) * 100).toFixed(1) : 0}%)
           </div>
         </div>
 
@@ -315,9 +316,8 @@ function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
         </div>
       </div>
 
-      {/* TIROIR DE L'HISTORIQUE */}
       {showHistory && crypto.history && (
-        <div className="bg-slate-900/60 p-4 border-t border-slate-800 animate-in slide-in-from-top duration-300">
+        <div className="bg-slate-900/60 p-4 border-t border-slate-800">
           <div className="text-[10px] orbitron text-slate-500 mb-2 tracking-widest">HISTORIQUE DES ACHATS</div>
           <table className="w-full text-xs text-left">
             <thead>
@@ -325,7 +325,7 @@ function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
                 <th className="pb-2">DATE</th>
                 <th className="pb-2">QUANTITÉ</th>
                 <th className="pb-2">INVESTI</th>
-                <th className="pb-2 text-right">PRIX D'ACHAT</th>
+                <th className="pb-2 text-right">PRIX UNIT.</th>
               </tr>
             </thead>
             <tbody>
@@ -335,7 +335,7 @@ function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
                   <td className="py-2 text-white">{tx.amount}</td>
                   <td className="py-2 text-white">${tx.invested.toLocaleString()}</td>
                   <td className="py-2 text-right text-slate-400">
-                    ${(tx.invested / tx.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    ${tx.amount > 0 ? (tx.invested / tx.amount).toLocaleString(undefined, { maximumFractionDigits: 2 }) : 0}
                   </td>
                 </tr>
               ))}
@@ -347,38 +347,29 @@ function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
   );
 }
 
-  return (
-    <div className="card rounded-2xl p-6 flex justify-between items-center">
-      <div className="flex items-center gap-4">
-        <div className="bg-indigo-500/20 p-3 rounded-full">
-          <TrendingUp size={24} className="text-indigo-400" />
-        </div>
-        <div>
-          <h3 className="orbitron text-xl font-bold text-white">{crypto.symbol}</h3>
-          <p className="text-slate-500 text-xs">Prix: ${currentPrice.toLocaleString()}</p>
-        </div>
-      </div>
-      <div className="text-right">
-        <div className="orbitron font-bold text-white">${val.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</div>
-        <div className={`text-xs ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-          {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$
-        </div>
-      </div>
-      <div className="flex gap-2 ml-4">
-        <button onClick={onEdit} className="p-2 bg-slate-800 rounded text-slate-400 hover:text-white"><Edit2 size={14}/></button>
-        <button onClick={onDelete} className="p-2 bg-red-900/20 rounded text-red-500 hover:bg-red-900/40"><Trash2 size={14}/></button>
-      </div>
-    </div>
-  );
-}
-
+// --- FORMULAIRE D'AJOUT ---
 function CryptoForm({ onSave, onCancel }) {
   const [formData, setFormData] = useState({ symbol: '', amount: '', invested: '', notes: '' });
+  
   return (
     <div className="card rounded-2xl p-6 mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-      <input placeholder="Symbole (BTC, ETH...)" onChange={e => setFormData({...formData, symbol: e.target.value.toUpperCase()})} className="p-2 bg-slate-900 rounded text-white border border-slate-700" />
-      <input type="number" placeholder="Quantité" onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} className="p-2 bg-slate-900 rounded text-white border border-slate-700" />
-      <input type="number" placeholder="Montant Investi ($)" onChange={e => setFormData({...formData, invested: parseFloat(e.target.value)})} className="p-2 bg-slate-900 rounded text-white border border-slate-700" />
+      <input 
+        placeholder="Symbole (BTC, ETH...)" 
+        onChange={e => setFormData({...formData, symbol: e.target.value.toUpperCase()})} 
+        className="p-2 bg-slate-900 rounded text-white border border-slate-700" 
+      />
+      <input 
+        type="number" 
+        placeholder="Quantité" 
+        onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} 
+        className="p-2 bg-slate-900 rounded text-white border border-slate-700" 
+      />
+      <input 
+        type="number" 
+        placeholder="Montant Investi ($)" 
+        onChange={e => setFormData({...formData, invested: parseFloat(e.target.value)})} 
+        className="p-2 bg-slate-900 rounded text-white border border-slate-700" 
+      />
       <div className="md:col-span-3 flex gap-2">
         <button onClick={() => onSave(formData)} className="bg-green-600 px-6 py-2 rounded text-white orbitron font-bold">AJOUTER</button>
         <button onClick={onCancel} className="bg-slate-700 px-6 py-2 rounded text-white orbitron font-bold">ANNULER</button>
