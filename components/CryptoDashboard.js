@@ -50,19 +50,34 @@ export default function CryptoDashboard() {
     }
   };
 
-  // Fonction pour mettre à jour les prix automatiquement (1x par jour)
+  const saveCryptos = async (newCryptos) => {
+    setCryptos(newCryptos);
+    if (typeof window !== 'undefined' && localStorage) {
+      localStorage.setItem('cryptos', JSON.stringify(newCryptos));
+    }
+  };
+
+  const saveAirdrops = async (newAirdrops) => {
+    setAirdrops(newAirdrops);
+    if (typeof window !== 'undefined' && localStorage) {
+      localStorage.setItem('airdrops', JSON.stringify(newAirdrops));
+    }
+  };
+
+  const savePortfolioHistory = async (newHistory) => {
+    setPortfolioHistory(newHistory);
+    if (typeof window !== 'undefined' && localStorage) {
+      localStorage.setItem('portfolio-history', JSON.stringify(newHistory));
+    }
+  };
+
+  // --- LOGIQUE COINGECKO ---
   const handlePriceAutoUpdate = async (currentCryptos) => {
     const today = new Date().toDateString();
     const lastUpdate = localStorage.getItem('last_price_update_date');
+    if (lastUpdate === today) return;
 
-    if (lastUpdate === today) {
-      console.log("Mise à jour des prix déjà effectuée aujourd'hui.");
-      return;
-    }
-
-    console.log("Mise à jour quotidienne des prix via CoinGecko...");
     const updatedCryptos = await fetchPricesFromCoinGecko(currentCryptos);
-    
     if (updatedCryptos) {
       setCryptos(updatedCryptos);
       saveCryptos(updatedCryptos);
@@ -71,19 +86,12 @@ export default function CryptoDashboard() {
     }
   };
 
-  // Appel API CoinGecko
   const fetchPricesFromCoinGecko = async (cryptoList) => {
     if (cryptoList.length === 0) return null;
-
     try {
       const symbols = cryptoList.map(c => c.symbol.toLowerCase()).join(',');
-      // On utilise l'endpoint simple/price qui est très léger
-      // Pour être plus précis, CoinGecko préfère les IDs, mais le symbole marche souvent
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${symbols}&order=market_cap_desc&sparkline=false`
-      );
+      const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${symbols}&order=market_cap_desc&sparkline=false`);
       const data = await response.json();
-
       if (!Array.isArray(data)) return null;
 
       return cryptoList.map(crypto => {
@@ -96,31 +104,9 @@ export default function CryptoDashboard() {
     }
   };
 
-  const saveCryptos = async (newCryptos) => {
-    setCryptos(newCryptos);
-    if (typeof window !== 'undefined' && localStorage) {
-      localStorage.setItem('cryptos', JSON.stringify(newCryptos));
-    }
-  };
-
-  // --- RESTE DES FONCTIONS (saveAirdrops, addCrypto, etc.) ---
-  // (Inchangées par rapport à la version précédente pour garder la stabilité)
-  
-  const saveAirdrops = async (newAirdrops) => {
-    setAirdrops(newAirdrops);
-    if (typeof window !== 'undefined' && localStorage) localStorage.setItem('airdrops', JSON.stringify(newAirdrops));
-  };
-
-  const savePortfolioHistory = async (newHistory) => {
-    setPortfolioHistory(newHistory);
-    if (typeof window !== 'undefined' && localStorage) localStorage.setItem('portfolio-history', JSON.stringify(newHistory));
-  };
-
+  // --- LOGIQUE PORTFOLIO ---
   const addCrypto = async (newAsset) => {
-    const existingIndex = cryptos.findIndex(
-      (c) => c.symbol.toUpperCase() === newAsset.symbol.toUpperCase()
-    );
-
+    const existingIndex = cryptos.findIndex(c => c.symbol.toUpperCase() === newAsset.symbol.toUpperCase());
     let updatedList;
     const transaction = {
       id: Date.now(),
@@ -132,40 +118,42 @@ export default function CryptoDashboard() {
     if (existingIndex !== -1) {
       updatedList = [...cryptos];
       const existing = updatedList[existingIndex];
-      
       updatedList[existingIndex] = {
         ...existing,
         amount: existing.amount + transaction.amount,
         invested: (existing.invested || 0) + transaction.invested,
-        // On ajoute la nouvelle transaction à l'historique
         history: [...(existing.history || []), transaction],
         lastAddedDate: new Date().toISOString()
       };
     } else {
-      const newEntry = { 
-        id: Date.now(), 
-        ...newAsset, 
-        history: [transaction], // Initialisation de l'historique
-        addedDate: new Date().toISOString() 
-      };
-      updatedList = [...cryptos, newEntry];
+      updatedList = [...cryptos, { id: Date.now(), ...newAsset, history: [transaction], addedDate: new Date().toISOString() }];
     }
 
-    const listWithPrices = await fetchPricesFromCoinGecko(updatedList);
-    await saveCryptos(listWithPrices || updatedList);
+    const withPrices = await fetchPricesFromCoinGecko(updatedList);
+    await saveCryptos(withPrices || updatedList);
     setShowAddCrypto(false);
-  };
-
-  const updateCrypto = async (id, updates) => {
-    await saveCryptos(cryptos.map(c => c.id === id ? { ...c, ...updates } : c));
-    setEditingCrypto(null);
   };
 
   const deleteCrypto = async (id) => {
     await saveCryptos(cryptos.filter(c => c.id !== id));
   };
 
-  // Calculs totaux
+  // --- LOGIQUE AIRDROPS ---
+  const addAirdrop = async (airdrop) => {
+    const newAirdrop = { id: Date.now(), ...airdrop, tasksCompleted: 0, createdDate: new Date().toISOString() };
+    await saveAirdrops([...airdrops, newAirdrop]);
+    setShowAddAirdrop(false);
+  };
+
+  const deleteAirdrop = async (id) => {
+    await saveAirdrops(airdrops.filter(a => a.id !== id));
+  };
+
+  const updateAirdrop = async (id, updates) => {
+    await saveAirdrops(airdrops.map(a => a.id === id ? { ...a, ...updates } : a));
+    setEditingAirdrop(null);
+  };
+
   const totalValue = cryptos.reduce((sum, c) => sum + (c.amount * (c.price || 0)), 0);
   const totalInvested = cryptos.reduce((sum, c) => sum + (c.invested || 0), 0);
   const totalPnL = totalValue - totalInvested;
@@ -177,52 +165,32 @@ export default function CryptoDashboard() {
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap');
         * { font-family: 'Space Mono', monospace; }
         .orbitron { font-family: 'Orbitron', sans-serif; }
-        .card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(99, 102, 241, 0.2); transition: all 0.3s ease; }
+        .card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(99, 102, 241, 0.2); }
       `}</style>
 
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8 text-center relative">
-          <h1 className="orbitron text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-pink-400 mb-2">
-            CRYPTO TRACKER
-          </h1>
-          {lastUpdateDate && (
-            <div className="flex items-center justify-center gap-2 text-xs text-slate-500 orbitron">
-              <RefreshCw size={12} className="text-green-500" />
-              PRIX À JOUR : {lastUpdateDate.toUpperCase()}
-            </div>
-          )}
+        <header className="mb-8 text-center">
+          <h1 className="orbitron text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-pink-400 mb-2">CRYPTO TRACKER</h1>
+          {lastUpdateDate && <div className="text-[10px] text-slate-500 orbitron">PRIX MAJ : {lastUpdateDate.toUpperCase()}</div>}
         </header>
 
-        {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="card rounded-2xl p-6">
-            <div className="flex justify-between mb-2">
-              <Wallet className="text-indigo-400" size={24} />
-              <span className="text-xs text-slate-500 orbitron">TOTAL VALUE</span>
-            </div>
+            <span className="text-xs text-slate-500 orbitron">TOTAL VALUE</span>
             <div className="orbitron text-3xl font-bold text-white">${totalValue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</div>
           </div>
           <div className="card rounded-2xl p-6">
-            <div className="flex justify-between mb-2">
-              {totalPnL >= 0 ? <TrendingUp className="text-green-400" size={24} /> : <TrendingDown className="text-red-400" size={24} />}
-              <span className="text-xs text-slate-500 orbitron">P&L TOTAL</span>
-            </div>
+            <span className="text-xs text-slate-500 orbitron">P&L TOTAL</span>
             <div className={`orbitron text-3xl font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {totalPnL >= 0 ? '+' : ''}{totalPnL.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}$
             </div>
           </div>
           <div className="card rounded-2xl p-6">
-            <div className="flex justify-between mb-2">
-              <Activity className="text-purple-400" size={24} />
-              <span className="text-xs text-slate-500 orbitron">PERFORMANCE</span>
-            </div>
-            <div className={`orbitron text-3xl font-bold ${pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
-            </div>
+            <span className="text-xs text-slate-500 orbitron">PERFORMANCE</span>
+            <div className={`orbitron text-3xl font-bold ${pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>{pnlPercent.toFixed(2)}%</div>
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 mb-6">
           <button onClick={() => setActiveTab('portfolio')} className={`orbitron px-6 py-3 rounded-xl font-bold ${activeTab === 'portfolio' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>PORTFOLIO</button>
           <button onClick={() => setActiveTab('airdrops')} className={`orbitron px-6 py-3 rounded-xl font-bold ${activeTab === 'airdrops' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>AIRDROPS</button>
@@ -231,112 +199,71 @@ export default function CryptoDashboard() {
         {activeTab === 'portfolio' && (
           <div>
             <div className="card rounded-2xl p-6 mb-6">
-               <PortfolioChart cryptos={cryptos} portfolioHistory={portfolioHistory} onUpdateHistory={savePortfolioHistory} />
+              <PortfolioChart cryptos={cryptos} portfolioHistory={portfolioHistory} onUpdateHistory={savePortfolioHistory} />
             </div>
-            
             <div className="flex justify-between items-center mb-4">
               <h2 className="orbitron text-2xl font-bold text-white">Mes Actifs</h2>
-              <button onClick={() => setShowAddCrypto(true)} className="bg-indigo-600 px-4 py-2 rounded-lg text-white orbitron font-bold text-sm">+ AJOUTER MANUELLEMENT</button>
+              <button onClick={() => setShowAddCrypto(true)} className="bg-indigo-600 px-4 py-2 rounded-lg text-white orbitron font-bold text-sm">+ AJOUTER</button>
             </div>
-
             {showAddCrypto && <CryptoForm onSave={addCrypto} onCancel={() => setShowAddCrypto(false)} />}
-
             <div className="grid grid-cols-1 gap-4">
-              {cryptos.map(c => (
-                <CryptoCard 
-                  key={c.id} 
-                  crypto={c} 
-                  isEditing={editingCrypto === c.id} 
-                  onEdit={() => setEditingCrypto(c.id)} 
-                  onSave={(u) => updateCrypto(c.id, u)} 
-                  onCancel={() => setEditingCrypto(null)} 
-                  onDelete={() => deleteCrypto(c.id)} 
-                />
-              ))}
+              {cryptos.map(c => <CryptoCard key={c.id} crypto={c} onEdit={() => setEditingCrypto(c.id)} isEditing={editingCrypto === c.id} onDelete={() => deleteCrypto(c.id)} />)}
             </div>
           </div>
         )}
 
-        {/* Note: La section Airdrops reste identique à ton code précédent */}
+        {activeTab === 'airdrops' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="orbitron text-2xl font-bold text-white">Farming Airdrops</h2>
+              <button onClick={() => setShowAddAirdrop(true)} className="bg-indigo-600 px-4 py-2 rounded-lg text-white orbitron font-bold text-sm">+ AJOUTER PROJET</button>
+            </div>
+            {showAddAirdrop && <AirdropForm onSave={addAirdrop} onCancel={() => setShowAddAirdrop(false)} />}
+            <div className="grid grid-cols-1 gap-4">
+              {airdrops.map(a => <AirdropCard key={a.id} airdrop={a} onDelete={() => deleteAirdrop(a.id)} onEdit={() => setEditingAirdrop(a.id)} />)}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Composant pour l'affichage d'une carte Crypto
-// --- COMPOSANT CRYPTOCARD AVEC HISTORIQUE ---
-function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
-  const [formData, setFormData] = useState(crypto);
+// --- SOUS-COMPOSANTS ---
+
+function CryptoCard({ crypto, isEditing, onEdit, onDelete }) {
   const [showHistory, setShowHistory] = useState(false);
-  
   const currentPrice = crypto.price || 0;
   const val = crypto.amount * currentPrice;
   const pnl = val - (crypto.invested || 0);
 
-  if (isEditing) {
-    return (
-      <div className="card rounded-2xl p-6 grid grid-cols-2 gap-4">
-        <input value={formData.symbol} onChange={e => setFormData({...formData, symbol: e.target.value.toUpperCase()})} placeholder="Symbole" className="p-2 bg-slate-900 rounded text-white" />
-        <input type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} placeholder="Quantité" className="p-2 bg-slate-900 rounded text-white" />
-        <input type="number" value={formData.invested} onChange={e => setFormData({...formData, invested: parseFloat(e.target.value)})} placeholder="Total Investi ($)" className="p-2 bg-slate-900 rounded text-white" />
-        <div className="flex gap-2">
-          <button onClick={() => onSave(formData)} className="bg-green-600 p-2 rounded text-white flex-1"><Save size={16} className="mx-auto"/></button>
-          <button onClick={onCancel} className="bg-slate-600 p-2 rounded text-white flex-1"><X size={16} className="mx-auto"/></button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="card rounded-2xl overflow-hidden mb-2">
-      <div 
-        className="p-6 flex justify-between items-center cursor-pointer hover:bg-slate-800/40 transition-colors"
-        onClick={() => setShowHistory(!showHistory)}
-      >
+      <div className="p-6 flex justify-between items-center cursor-pointer hover:bg-slate-800/40" onClick={() => setShowHistory(!showHistory)}>
         <div className="flex items-center gap-4">
-          <div className="bg-indigo-500/20 p-3 rounded-full">
-            <TrendingUp size={24} className="text-indigo-400" />
-          </div>
+          <div className="bg-indigo-500/20 p-3 rounded-full"><TrendingUp size={24} className="text-indigo-400" /></div>
           <div>
             <h3 className="orbitron text-xl font-bold text-white">{crypto.symbol}</h3>
-            <p className="text-slate-500 text-xs">Prix actuel: ${currentPrice.toLocaleString()}</p>
+            <p className="text-slate-500 text-xs">${currentPrice.toLocaleString()}</p>
           </div>
         </div>
-        
         <div className="text-right">
           <div className="orbitron font-bold text-white">${val.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</div>
-          <div className={`text-xs ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$ ({crypto.invested > 0 ? ((pnl / crypto.invested) * 100).toFixed(1) : 0}%)
-          </div>
+          <div className={`text-xs ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$</div>
         </div>
-
         <div className="flex gap-2 ml-4" onClick={(e) => e.stopPropagation()}>
-          <button onClick={onEdit} className="p-2 bg-slate-800 rounded text-slate-400 hover:text-white"><Edit2 size={14}/></button>
-          <button onClick={onDelete} className="p-2 bg-red-900/20 rounded text-red-500 hover:bg-red-900/40"><Trash2 size={14}/></button>
+          <button onClick={onDelete} className="p-2 bg-red-900/20 rounded text-red-500"><Trash2 size={14}/></button>
         </div>
       </div>
-
       {showHistory && crypto.history && (
         <div className="bg-slate-900/60 p-4 border-t border-slate-800">
-          <div className="text-[10px] orbitron text-slate-500 mb-2 tracking-widest">HISTORIQUE DES ACHATS</div>
-          <table className="w-full text-xs text-left">
-            <thead>
-              <tr className="text-slate-400 border-b border-slate-800">
-                <th className="pb-2">DATE</th>
-                <th className="pb-2">QUANTITÉ</th>
-                <th className="pb-2">INVESTI</th>
-                <th className="pb-2 text-right">PRIX UNIT.</th>
-              </tr>
-            </thead>
+          <table className="w-full text-[10px] text-left">
+            <thead><tr className="text-slate-500 border-b border-slate-800"><th className="pb-2">DATE</th><th className="pb-2">QTÉ</th><th className="pb-2">INVESTI</th><th className="pb-2 text-right">PAMP</th></tr></thead>
             <tbody>
-              {crypto.history.map((tx) => (
+              {crypto.history.map(tx => (
                 <tr key={tx.id} className="border-b border-slate-800/30">
-                  <td className="py-2 text-slate-300">{tx.date}</td>
-                  <td className="py-2 text-white">{tx.amount}</td>
-                  <td className="py-2 text-white">${tx.invested.toLocaleString()}</td>
-                  <td className="py-2 text-right text-slate-400">
-                    ${tx.amount > 0 ? (tx.invested / tx.amount).toLocaleString(undefined, { maximumFractionDigits: 2 }) : 0}
-                  </td>
+                  <td className="py-2 text-slate-400">{tx.date}</td><td className="py-2 text-white">{tx.amount}</td><td className="py-2 text-white">${tx.invested}</td>
+                  <td className="py-2 text-right text-slate-500">${(tx.invested / tx.amount).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -347,31 +274,43 @@ function CryptoCard({ crypto, isEditing, onEdit, onSave, onCancel, onDelete }) {
   );
 }
 
-// --- FORMULAIRE D'AJOUT ---
 function CryptoForm({ onSave, onCancel }) {
-  const [formData, setFormData] = useState({ symbol: '', amount: '', invested: '', notes: '' });
-  
+  const [formData, setFormData] = useState({ symbol: '', amount: '', invested: '' });
   return (
     <div className="card rounded-2xl p-6 mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-      <input 
-        placeholder="Symbole (BTC, ETH...)" 
-        onChange={e => setFormData({...formData, symbol: e.target.value.toUpperCase()})} 
-        className="p-2 bg-slate-900 rounded text-white border border-slate-700" 
-      />
-      <input 
-        type="number" 
-        placeholder="Quantité" 
-        onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} 
-        className="p-2 bg-slate-900 rounded text-white border border-slate-700" 
-      />
-      <input 
-        type="number" 
-        placeholder="Montant Investi ($)" 
-        onChange={e => setFormData({...formData, invested: parseFloat(e.target.value)})} 
-        className="p-2 bg-slate-900 rounded text-white border border-slate-700" 
-      />
+      <input placeholder="Symbole" onChange={e => setFormData({...formData, symbol: e.target.value.toUpperCase()})} className="p-2 bg-slate-900 rounded text-white border border-slate-700" />
+      <input type="number" placeholder="Quantité" onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} className="p-2 bg-slate-900 rounded text-white border border-slate-700" />
+      <input type="number" placeholder="Investi ($)" onChange={e => setFormData({...formData, invested: parseFloat(e.target.value)})} className="p-2 bg-slate-900 rounded text-white border border-slate-700" />
       <div className="md:col-span-3 flex gap-2">
-        <button onClick={() => onSave(formData)} className="bg-green-600 px-6 py-2 rounded text-white orbitron font-bold">AJOUTER</button>
+        <button onClick={() => onSave(formData)} className="bg-indigo-600 px-6 py-2 rounded text-white orbitron font-bold">AJOUTER</button>
+        <button onClick={onCancel} className="bg-slate-700 px-6 py-2 rounded text-white orbitron font-bold">ANNULER</button>
+      </div>
+    </div>
+  );
+}
+
+function AirdropCard({ airdrop, onDelete }) {
+  const completionPercent = (airdrop.tasksCompleted / airdrop.tasksTotal) * 100;
+  return (
+    <div className="card rounded-2xl p-6">
+      <div className="flex justify-between items-start mb-4">
+        <h3 className="orbitron text-2xl font-bold text-white">{airdrop.project}</h3>
+        <button onClick={onDelete} className="p-2 bg-red-900/20 rounded text-red-500"><Trash2 size={14}/></button>
+      </div>
+      <div className="text-xs orbitron text-slate-500 mb-1">PROGRESSION : {airdrop.tasksCompleted}/{airdrop.tasksTotal}</div>
+      <div className="h-1 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{ width: `${completionPercent}%` }} /></div>
+    </div>
+  );
+}
+
+function AirdropForm({ onSave, onCancel }) {
+  const [formData, setFormData] = useState({ project: '', tasksTotal: 10 });
+  return (
+    <div className="card rounded-2xl p-6 mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <input placeholder="Nom du Projet" onChange={e => setFormData({...formData, project: e.target.value})} className="p-2 bg-slate-900 rounded text-white border border-slate-700" />
+      <input type="number" placeholder="Total Tâches" onChange={e => setFormData({...formData, tasksTotal: parseInt(e.target.value)})} className="p-2 bg-slate-900 rounded text-white border border-slate-700" />
+      <div className="md:col-span-2 flex gap-2">
+        <button onClick={() => onSave(formData)} className="bg-indigo-600 px-6 py-2 rounded text-white orbitron font-bold">CRÉER</button>
         <button onClick={onCancel} className="bg-slate-700 px-6 py-2 rounded text-white orbitron font-bold">ANNULER</button>
       </div>
     </div>
