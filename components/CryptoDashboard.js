@@ -40,7 +40,16 @@ export default function CryptoDashboard() {
           loadedCryptos = JSON.parse(cryptoData);
           setCryptos(loadedCryptos);
         }
-        if (airdropData) setAirdrops(JSON.parse(airdropData));
+        if (airdropData) {
+          const parsedAirdrops = JSON.parse(airdropData);
+          // Sécurité : on s'assure que chaque airdrop a au moins un tableau d'actions vide
+          const securedAirdrops = parsedAirdrops.map(a => ({
+            ...a,
+            actions: a.actions || [],
+            totalPnL: a.totalPnL || 0
+          }));
+          setAirdrops(securedAirdrops);
+        }
         if (historyData) setPortfolioHistory(JSON.parse(historyData));
         if (lastUpdate) setLastUpdateDate(lastUpdate);
       }
@@ -87,7 +96,7 @@ export default function CryptoDashboard() {
   };
 
   const fetchPricesFromCoinGecko = async (cryptoList) => {
-    if (cryptoList.length === 0) return null;
+    if (!cryptoList || cryptoList.length === 0) return null;
     try {
       const symbols = cryptoList.map(c => c.symbol.toLowerCase()).join(',');
       const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${symbols}&order=market_cap_desc&sparkline=false`);
@@ -120,7 +129,7 @@ export default function CryptoDashboard() {
       const existing = updatedList[existingIndex];
       updatedList[existingIndex] = {
         ...existing,
-        amount: existing.amount + transaction.amount,
+        amount: (existing.amount || 0) + transaction.amount,
         invested: (existing.invested || 0) + transaction.invested,
         history: [...(existing.history || []), transaction],
         lastAddedDate: new Date().toISOString()
@@ -140,7 +149,7 @@ export default function CryptoDashboard() {
 
   // --- LOGIQUE AIRDROPS ---
   const addAirdropAction = async (newAction) => {
-    const existingIndex = airdrops.findIndex(a => a.project.toLowerCase() === newAction.project.toLowerCase());
+    const existingIndex = airdrops.findIndex(a => a.project?.toLowerCase() === newAction.project?.toLowerCase());
     let updatedAirdrops;
     
     const actionEntry = {
@@ -179,7 +188,7 @@ export default function CryptoDashboard() {
   };
 
   // --- CALCULS ---
-  const totalValue = cryptos.reduce((sum, c) => sum + (c.amount * (c.price || 0)), 0);
+  const totalValue = cryptos.reduce((sum, c) => sum + ((c.amount || 0) * (c.price || 0)), 0);
   const totalInvested = cryptos.reduce((sum, c) => sum + (c.invested || 0), 0);
   const totalPnL = totalValue - totalInvested;
   const pnlPercent = totalInvested > 0 ? ((totalPnL / totalInvested) * 100) : 0;
@@ -245,7 +254,11 @@ export default function CryptoDashboard() {
             </div>
             {showAddAirdrop && <AirdropForm onSave={addAirdropAction} onCancel={() => setShowAddAirdrop(false)} />}
             <div className="grid grid-cols-1 gap-4">
-              {airdrops.map(a => <AirdropCard key={a.id} airdrop={a} onDelete={() => deleteAirdrop(a.id)} />)}
+              {airdrops && airdrops.length > 0 ? (
+                airdrops.map(a => <AirdropCard key={a.id} airdrop={a} onDelete={() => deleteAirdrop(a.id)} />)
+              ) : (
+                <div className="card rounded-2xl p-12 text-center text-slate-500 orbitron">AUCUN PROJET ENREGISTRÉ</div>
+              )}
             </div>
           </div>
         )}
@@ -258,9 +271,9 @@ export default function CryptoDashboard() {
 
 function CryptoCard({ crypto, onDelete }) {
   const [showHistory, setShowHistory] = useState(false);
-  const currentPrice = crypto.price || 0;
-  const val = crypto.amount * currentPrice;
-  const pnl = val - (crypto.invested || 0);
+  const currentPrice = crypto?.price || 0;
+  const val = (crypto?.amount || 0) * currentPrice;
+  const pnl = val - (crypto?.invested || 0);
 
   return (
     <div className="card rounded-2xl overflow-hidden mb-2">
@@ -268,19 +281,21 @@ function CryptoCard({ crypto, onDelete }) {
         <div className="flex items-center gap-4">
           <div className="bg-indigo-500/20 p-3 rounded-full"><TrendingUp size={24} className="text-indigo-400" /></div>
           <div>
-            <h3 className="orbitron text-xl font-bold text-white">{crypto.symbol}</h3>
+            <h3 className="orbitron text-xl font-bold text-white">{crypto?.symbol}</h3>
             <p className="text-slate-500 text-xs">${currentPrice.toLocaleString()}</p>
           </div>
         </div>
         <div className="text-right">
           <div className="orbitron font-bold text-white">${val.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</div>
-          <div className={`text-xs ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$</div>
+          <div className={`text-xs ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}$
+          </div>
         </div>
         <div className="flex gap-2 ml-4" onClick={(e) => e.stopPropagation()}>
           <button onClick={onDelete} className="p-2 bg-red-900/20 rounded text-red-500"><Trash2 size={14}/></button>
         </div>
       </div>
-      {showHistory && crypto.history && (
+      {showHistory && crypto?.history && (
         <div className="bg-slate-900/60 p-4 border-t border-slate-800">
           <table className="w-full text-[10px] text-left">
             <thead><tr className="text-slate-500 border-b border-slate-800"><th className="pb-2">DATE</th><th className="pb-2">QTÉ</th><th className="pb-2">INVESTI</th><th className="pb-2 text-right">PAMP</th></tr></thead>
@@ -323,22 +338,26 @@ function AirdropCard({ airdrop, onDelete }) {
       <div className="p-6 flex justify-between items-center cursor-pointer hover:bg-slate-800/40" onClick={() => setShowDetails(!showDetails)}>
         <div>
           <div className="flex items-center gap-3">
-            <h3 className="orbitron text-xl font-bold text-white uppercase">{airdrop.project}</h3>
-            <span className={`text-[8px] px-2 py-0.5 rounded border orbitron ${statusColors[airdrop.status] || 'text-slate-400'}`}>{airdrop.status?.toUpperCase()}</span>
+            <h3 className="orbitron text-xl font-bold text-white uppercase">{airdrop?.project || 'Sans Nom'}</h3>
+            <span className={`text-[8px] px-2 py-0.5 rounded border orbitron ${statusColors[airdrop?.status] || 'text-slate-400'}`}>
+              {airdrop?.status?.toUpperCase() || 'EN COURS'}
+            </span>
           </div>
-          <p className="text-slate-500 text-[10px] orbitron mt-1">{airdrop.actions?.length || 0} ACTIONS</p>
+          <p className="text-slate-500 text-[10px] orbitron mt-1">{airdrop?.actions?.length || 0} ACTIONS</p>
         </div>
         <div className="text-right flex items-center gap-6">
           <div>
             <div className="text-[10px] text-slate-500 orbitron">BILAN</div>
-            <div className={`orbitron font-bold ${airdrop.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{airdrop.totalPnL.toFixed(2)}$</div>
+            <div className={`orbitron font-bold ${(airdrop?.totalPnL || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {(airdrop?.totalPnL || 0).toFixed(2)}$
+            </div>
           </div>
           <button onClick={(e) => { e.stopPropagation(); onDelete(airdrop.id); }} className="text-red-500/50 hover:text-red-500"><Trash2 size={16}/></button>
         </div>
       </div>
-      {showDetails && (
+      {showDetails && airdrop?.actions && (
         <div className="bg-slate-900/60 p-4 border-t border-slate-800">
-          {airdrop.actions?.map(action => (
+          {airdrop.actions.map(action => (
             <div key={action.id} className="flex justify-between items-center p-2 mb-1 bg-slate-800/30 rounded">
               <div className="text-[10px]"><span className="text-indigo-400">{action.date}</span> — <span className="text-slate-300">{action.note}</span></div>
               <div className={`orbitron text-[10px] font-bold ${action.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>{action.profitLoss}$</div>
