@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { Menu, Wallet, Sparkles } from 'lucide-react';
+import Link from 'next/link'; // Import indispensable pour la navigation
+import { useRouter } from 'next/router'; // Pour détecter la page active automatiquement
 
-export default function Layout({ children, activePage, onPageChange }) {
+export default function Layout({ children }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const router = useRouter();
 
   const pages = [
-    { id: 'crypto', name: 'Crypto Dashboard', icon: Wallet },
-    { id: 'pokemon', name: 'Pokémon Collection', icon: Sparkles }
+    { id: 'crypto', name: 'Crypto Dashboard', icon: Wallet, path: '/' },
+    { id: 'pokemon', name: 'Pokémon Collection', icon: Sparkles, path: '/pokemon-collection' }
   ];
 
-  const currentPage = pages.find(p => p.id === activePage);
+  // On trouve la page active en fonction de l'URL actuelle
+  const currentPage = pages.find(p => p.path === router.pathname) || pages[0];
   const CurrentIcon = currentPage?.icon || Wallet;
 
   return (
@@ -36,24 +40,22 @@ export default function Layout({ children, activePage, onPageChange }) {
                 <div className="absolute top-full left-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
                   {pages.map((page) => {
                     const PageIcon = page.icon;
-                    const isActive = page.id === activePage;
+                    const isActive = router.pathname === page.path;
                     
                     return (
-                      <button
-                        key={page.id}
-                        onClick={() => {
-                          onPageChange(page.id);
-                          setIsMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 transition-all ${
-                          isActive
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-slate-300 hover:bg-slate-700'
-                        }`}
-                      >
-                        <PageIcon size={20} />
-                        <span className="orbitron font-semibold">{page.name}</span>
-                      </button>
+                      <Link key={page.id} href={page.path}>
+                        <a
+                          onClick={() => setIsMenuOpen(false)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 transition-all ${
+                            isActive
+                              ? 'bg-indigo-600 text-white'
+                              : 'text-slate-300 hover:bg-slate-700'
+                          }`}
+                        >
+                          <PageIcon size={20} />
+                          <span className="orbitron font-semibold">{page.name}</span>
+                        </a>
+                      </Link>
                     );
                   })}
                 </div>
