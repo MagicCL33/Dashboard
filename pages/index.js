@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import CryptoDashboard from '../components/CryptoDashboard';
-import PokemonCollection from '../components/PokemonCollection';
+import PokemonCollection from '../components/PokemonDashboard';
 
 export default function Home() {
   const [activePage, setActivePage] = useState('crypto');
