@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Layout from '../components/Layout';
-import CryptoDashboard from '../components/CryptoDashboard'; // Ton composant crypto existant
-import PokemonCollection from '../components/PokemonCollectionContent'; // On va renommer ton code pokemon
+import CryptoDashboard from '../components/CryptoDashboard';
+import PokemonCollection from '../components/PokemonCollection';
 
 export default function Home() {
   const [activePage, setActivePage] = useState('crypto');
