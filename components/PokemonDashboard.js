@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Papa from 'papaparse';
-import { Search, Database, TrendingUp, AlertCircle, CheckCircle2, Circle, Wallet } from 'lucide-react';
+import { Search, Database, TrendingUp, AlertCircle, CheckCircle2, Circle, Wallet, Filter } from 'lucide-react';
 
 export default function PokemonCollection() {
   const [cards, setCards] = useState([]);
@@ -8,8 +8,11 @@ export default function PokemonCollection() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("tous");
+  
+  // Nouveaux états pour les filtres de bloc et série
+  const [blocFilter, setBlocFilter] = useState("tous");
+  const [serieFilter, setSerieFilter] = useState("tous");
 
-  // Une seule feuille de calcul, c'est parfait
   const SHEET_URL = "https://docs.google.com/spreadsheets/d/1CeE5Mfm50je0Rn9zijf1zrMgmLFmurys4nL3362q71Y/export?format=csv&gid=287748346";
 
   useEffect(() => {
@@ -19,7 +22,6 @@ export default function PokemonCollection() {
       skipEmptyLines: true,
       complete: (results) => {
         try {
-          // 1. Récupérer les modifications déjà sauvegardées localement par l'utilisateur
           const savedData = JSON.parse(localStorage.getItem('pokemon_dashboard_user_data')) || {};
 
           const rawData = results.data
@@ -28,10 +30,7 @@ export default function PokemonCollection() {
               return ![1, 28, 29, 199].includes(rowNum) && row[4] && row[4].trim() !== "";
             })
             .map((row, index) => {
-              // On crée une clé unique pour cette carte basée sur Nom + Série + Numéro
               const cardKey = `${row[4].trim()}-${row[2].trim()}-${row[3].trim()}`;
-              
-              // Si l'utilisateur a modifié cette carte localement, on prend ses valeurs, sinon celles du Excel
               const hasLocalUpdate = savedData[cardKey];
 
               return {
@@ -49,7 +48,6 @@ export default function PokemonCollection() {
               };
             });
 
-          // Anti-doublon
           const uniqueCards = rawData.filter((card, index, self) =>
             index === self.findIndex((t) => t.key === card.key)
           );
@@ -68,7 +66,7 @@ export default function PokemonCollection() {
     });
   }, []);
 
-  // --- SAUVEGARDE EN TEMPS RÉEL DES MODIFICATIONS ---
+  // --- SAUVEGARDE EN TEMPS RÉEL ---
   const handleCardInteraction = (cardId) => {
     setCards(prevCards => {
       const updatedCards = prevCards.map(card => {
@@ -88,7 +86,6 @@ export default function PokemonCollection() {
         return card;
       });
 
-      // On enregistre l'état actuel de TOUTES les cartes modifiées dans le LocalStorage
       const dataToSave = {};
       updatedCards.forEach(c => {
         dataToSave[c.key] = { statut: c.statut, prix: c.prix };
@@ -97,6 +94,31 @@ export default function PokemonCollection() {
 
       return updatedCards;
     });
+  };
+
+  // --- GÉNÉRATION DYNAMIQUE DES LISTES DE BLOCS ET SÉRIES ---
+  const { blocs, series } = useMemo(() => {
+    const listBlocs = new Set();
+    const listSeries = new Set();
+
+    cards.forEach(card => {
+      if (card.bloc) listBlocs.add(card.bloc);
+      // Si un bloc est sélectionné, on ne montre que les séries de ce bloc dans le menu déroulant
+      if (blocFilter === "tous" || card.bloc === blocFilter) {
+        if (card.serie) listSeries.add(card.serie);
+      }
+    });
+
+    return {
+      blocs: Array.from(listBlocs).sort(),
+      series: Array.from(listSeries).sort()
+    };
+  }, [cards, blocFilter]);
+
+  // Réinitialiser le filtre de série si le bloc change et que la série n'y appartient plus
+  const handleBlocChange = (e) => {
+    setBlocFilter(e.target.value);
+    setSerieFilter("tous"); // Reset de la série pour éviter les conflits
   };
 
   // --- STATISTIQUES ---
@@ -112,17 +134,20 @@ export default function PokemonCollection() {
     };
   }, [cards]);
 
-  // --- FILTRES ---
+  // --- LOGIQUE DE FILTRAGE MULTI-CRITÈRES ---
   const filteredCards = useMemo(() => {
     return cards.filter(c => {
       const search = searchTerm.toLowerCase();
-      const matchesSearch = c.nom.toLowerCase().includes(search) || c.serie.toLowerCase().includes(search);
+      const matchesSearch = c.nom.toLowerCase().includes(search) || c.numero.toLowerCase().includes(search);
       const matchesStatus = statusFilter === "tous" || c.statut === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [cards, searchTerm, statusFilter]);
+      const matchesBloc = blocFilter === "tous" || c.bloc === blocFilter;
+      const matchesSerie = serieFilter === "tous" || c.serie === serieFilter;
 
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-indigo-500 orbitron animate-pulse">Chargement persistant...</div>;
+      return matchesSearch && matchesStatus && matchesBloc && matchesSerie;
+    });
+  }, [cards, searchTerm, statusFilter, blocFilter, serieFilter]);
+
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-indigo-500 orbitron animate-pulse">Chargement des filtres...</div>;
   if (error) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-500 orbitron">{error}</div>;
 
   return (
@@ -154,18 +179,47 @@ export default function PokemonCollection() {
           </div>
         </div>
 
-        {/* RECHERCHE */}
-        <div className="flex flex-col lg:flex-row gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800">
+        {/* RECHERCHE & FILTRES */}
+        <div className="flex flex-col gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800 sticky top-4 z-40 backdrop-blur-md">
+          
+          {/* Ligne 1 : Recherche textuelle */}
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-            <input type="text" placeholder="Rechercher une carte..." className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all" onChange={(e) => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Rechercher par nom ou numéro..." className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all" onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
-          <div className="flex gap-1 p-1 bg-slate-900/50 rounded-xl border border-slate-700">
-            {['tous', "j'ai", 'je veux'].map(id => (
-              <button key={id} onClick={() => setStatusFilter(id)} className={`px-6 py-2 rounded-lg text-[10px] font-bold orbitron transition-all ${statusFilter === id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
-                {id.toUpperCase()}
-              </button>
-            ))}
+
+          {/* Ligne 2 : Filtres Selecteurs & Statuts */}
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-center justify-between">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+              
+              {/* Filtre BLOC */}
+              <div className="flex items-center gap-2 bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2 flex-1 sm:flex-initial">
+                <Filter size={14} className="text-indigo-400" />
+                <select value={blocFilter} onChange={handleBlocChange} className="bg-transparent text-xs orbitron text-white outline-none cursor-pointer w-full">
+                  <option value="tous" className="bg-slate-900">BLOCS (TOUS)</option>
+                  {blocs.map(b => <option key={b} value={b} className="bg-slate-900">{b.toUpperCase()}</option>)}
+                </select>
+              </div>
+
+              {/* Filtre SÉRIE */}
+              <div className="flex items-center gap-2 bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2 flex-1 sm:flex-initial">
+                <Filter size={14} className="text-purple-400" />
+                <select value={serieFilter} onChange={(e) => setSerieFilter(e.target.value)} className="bg-transparent text-xs orbitron text-white outline-none cursor-pointer w-full">
+                  <option value="tous" className="bg-slate-900">SÉRIES (TOUTES)</option>
+                  {series.map(s => <option key={s} value={s} className="bg-slate-900">{s.toUpperCase()}</option>)}
+                </select>
+              </div>
+
+            </div>
+
+            {/* Sélecteur J'AI / JE VEUX */}
+            <div className="flex gap-1 p-1 bg-slate-950/50 rounded-xl border border-slate-700 w-full sm:w-auto">
+              {['tous', "j'ai", 'je veux'].map(id => (
+                <button key={id} onClick={() => setStatusFilter(id)} className={`flex-1 sm:flex-initial px-4 py-2 rounded-lg text-[10px] font-bold orbitron transition-all ${statusFilter === id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}>
+                  {id.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -188,6 +242,7 @@ export default function PokemonCollection() {
                       <span className="text-[9px] text-slate-500 font-mono">#{card.numero}</span>
                     </div>
                     <p className="text-indigo-400 text-[9px] font-bold uppercase tracking-widest truncate">{card.serie}</p>
+                    <p className="text-slate-600 text-[8px] font-bold uppercase tracking-widest">{card.bloc}</p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-800 flex justify-between items-center">
                     <span className="text-[8px] orbitron text-slate-500">{card.langue}</span>
@@ -202,6 +257,13 @@ export default function PokemonCollection() {
             );
           })}
         </div>
+
+        {/* Aucun résultat */}
+        {filteredCards.length === 0 && (
+          <div className="text-center py-20 bg-slate-900/10 rounded-2xl border border-dashed border-slate-800">
+            <p className="text-slate-500 orbitron text-sm">Aucun Pokémon ne correspond à ces critères de recherche.</p>
+          </div>
+        )}
 
       </div>
     </div>
