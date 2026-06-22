@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Papa from 'papaparse';
-import { Search, Database, TrendingUp, AlertCircle, CheckCircle2, Circle, Wallet, Filter } from 'lucide-react';
+import { Search, Database, TrendingUp, AlertCircle, CheckCircle2, Circle, Wallet, Filter, Star } from 'lucide-react';
 
 export default function PokemonCollection() {
   const [cards, setCards] = useState([]);
@@ -9,11 +9,9 @@ export default function PokemonCollection() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("tous");
   
-  // États pour les filtres dynamiques de bloc et série
   const [blocFilter, setBlocFilter] = useState("tous");
   const [serieFilter, setSerieFilter] = useState("tous");
 
-  // URL configurée précisément sur l'onglet "liste dashboard" (GID 287748346)
   const SHEET_URL = "https://docs.google.com/spreadsheets/d/1CeE5Mfm50je0Rn9zijf1zrMgmLFmurys4nL3362q71Y/export?format=csv&gid=287748346";
 
   useEffect(() => {
@@ -23,17 +21,14 @@ export default function PokemonCollection() {
       skipEmptyLines: true,
       complete: (results) => {
         try {
-          // Récupération des données sauvegardées localement (prix, statuts modifiés)
           const savedData = JSON.parse(localStorage.getItem('pokemon_dashboard_user_data')) || {};
 
           const rawData = results.data
             .filter((row, index) => {
               const rowNum = index + 1;
-              // On ignore la ligne 1 (en-tête) et les lignes de séparation spécifiques de ton onglet
               return ![1, 28, 29, 199].includes(rowNum) && row[4] && row[4].trim() !== "";
             })
             .map((row, index) => {
-              // Clé unique pour lier le LocalStorage (Nom - Série - Numéro)
               const cardKey = `${row[4].trim()}-${row[2].trim()}-${row[3].trim()}`;
               const hasLocalUpdate = savedData[cardKey];
 
@@ -48,12 +43,11 @@ export default function PokemonCollection() {
                 imageUrl: (row[5] || "").trim(),
                 langue: (row[6] || "").trim(),
                 etat: (row[7] || "N/A").trim(),
-                // Récupère le prix modifié localement, sinon prend le prix par défaut du sheet s'il existe
-                prix: hasLocalUpdate ? savedData[cardKey].prix : (parseFloat(String(row[8]).replace(',', '.')) || 0)
+                prix: hasLocalUpdate ? savedData[cardKey].prix : (parseFloat(String(row[8]).replace(',', '.')) || 0),
+                priorite: (row[9] || "").trim() // Colonne J (index 9) pour la priorité
               };
             });
 
-          // Nettoyage des doublons
           const uniqueCards = rawData.filter((card, index, self) =>
             index === self.findIndex((t) => t.key === card.key)
           );
@@ -72,7 +66,6 @@ export default function PokemonCollection() {
     });
   }, []);
 
-  // --- INTERACTION CLIC (CHANGEMENT STATUT + DEMANDE DE PRIX) ---
   const handleCardInteraction = (cardId) => {
     setCards(prevCards => {
       const updatedCards = prevCards.map(card => {
@@ -92,7 +85,6 @@ export default function PokemonCollection() {
         return card;
       });
 
-      // Enregistrement persistant local
       const dataToSave = {};
       updatedCards.forEach(c => {
         dataToSave[c.key] = { statut: c.statut, prix: c.prix };
@@ -103,7 +95,6 @@ export default function PokemonCollection() {
     });
   };
 
-  // --- EXTRACTION DYNAMIQUE DES LISTES DE FILTRES ---
   const { blocs, series } = useMemo(() => {
     const listBlocs = new Set();
     const listSeries = new Set();
@@ -126,7 +117,6 @@ export default function PokemonCollection() {
     setSerieFilter("tous"); 
   };
 
-  // --- STATISTIQUES EN TEMPS RÉEL ---
   const stats = useMemo(() => {
     const ownedCards = cards.filter(c => c.statut === "j'ai");
     const totalSpent = ownedCards.reduce((sum, c) => sum + (c.prix || 0), 0);
@@ -139,7 +129,12 @@ export default function PokemonCollection() {
     };
   }, [cards]);
 
-  // --- APPLICATION DES FILTRES MULTI-CRITÈRES ---
+  // --- FILTRE POUR LE BANDEAU PRIORITAIRE (Statut 'je veux' ET Priorité '1') ---
+  const priorityCards = useMemo(() => {
+    return cards.filter(c => c.statut === "je veux" && c.priorite === "1");
+  }, [cards]);
+
+  // --- APPLICATION DES FILTRES DE LA GRILLE PRINCIPALE ---
   const filteredCards = useMemo(() => {
     return cards.filter(c => {
       const search = searchTerm.toLowerCase();
@@ -152,11 +147,11 @@ export default function PokemonCollection() {
     });
   }, [cards, searchTerm, statusFilter, blocFilter, serieFilter]);
 
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-indigo-500 orbitron animate-pulse">Chargement de l'onglet 'liste dashboard'...</div>;
+  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-indigo-500 orbitron animate-pulse">Chargement du Pokédex et des priorités...</div>;
   if (error) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-red-500 orbitron">{error}</div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8">
+    <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8 select-none">
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* BANDEAU DE STATISTIQUES */}
@@ -184,9 +179,49 @@ export default function PokemonCollection() {
           </div>
         </div>
 
-        {/* RECHERCHE & FILTRES */}
+        {/* --- NOUVEAU BANDEAU HORIZONTAL : RECHERCHES PRIORITAIRES (TOP WISHLIST) --- */}
+        {priorityCards.length > 0 && (
+          <div className="space-y-3 bg-gradient-to-r from-amber-500/10 via-slate-900/40 to-slate-900/40 border border-amber-500/20 p-4 rounded-3xl">
+            <div className="flex items-center gap-2 text-amber-400 px-1">
+              <Star size={16} className="fill-amber-400 animate-pulse" />
+              <h2 className="text-xs font-bold orbitron tracking-widest uppercase">Priorités Absolues ({priorityCards.length})</h2>
+            </div>
+            
+            {/* Conteneur défilant horizontalement */}
+            <div className="flex gap-4 overflow-x-auto pb-2 pt-1 scrollbar-none snap-x snap-mandatory">
+              {priorityCards.map((card) => (
+                <div 
+                  key={`priority-${card.id}`}
+                  onClick={() => handleCardInteraction(card.id)}
+                  className="w-[170px] md:w-[190px] flex-shrink-0 snap-start group relative flex flex-col bg-slate-950/80 border border-amber-500/30 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer opacity-70 grayscale hover:opacity-100 hover:grayscale-0 hover:border-amber-400 shadow-lg"
+                >
+                  <div className="relative aspect-[3/4] bg-slate-900">
+                    <img src={card.imageUrl || 'https://via.placeholder.com/400x560?text=No+Image'} alt={card.nom} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                    <div className="absolute top-2 right-2 p-1 rounded-md backdrop-blur-md bg-amber-500/20 text-amber-400">
+                      <Star size={12} className="fill-amber-400" />
+                    </div>
+                  </div>
+                  <div className="p-3 flex-1 flex flex-col justify-between bg-slate-900/40">
+                    <div>
+                      <div className="flex justify-between items-start gap-1 mb-0.5">
+                        <h3 className="orbitron text-[9px] font-bold truncate text-slate-300">{card.nom}</h3>
+                        <span className="text-[8px] text-slate-500 font-mono">#{card.numero}</span>
+                      </div>
+                      <p className="text-indigo-400 text-[8px] font-bold uppercase tracking-wider truncate">{card.serie}</p>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between items-center text-[7px]">
+                      <span className="orbitron text-slate-500">{card.langue}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 uppercase font-bold">{card.etat}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* RECHERCHE & FILTRES PRINCIPAUX */}
         <div className="flex flex-col gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800 sticky top-4 z-40 backdrop-blur-md">
-          
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
             <input type="text" placeholder="Rechercher par nom ou numéro..." className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all" onChange={(e) => setSearchTerm(e.target.value)} />
